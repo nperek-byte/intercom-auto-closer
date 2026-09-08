@@ -1,0 +1,31 @@
+name: Intercom Auto-Closer
+
+on:
+  schedule:
+    # 07:30 UTC = 10:30am Israel time (IDT, UTC+3)
+    # NOTE: Israel switches to winter time (IST, UTC+2) in late October —
+    # this will land at 9:30am local until the cron is updated.
+    - cron: "30 7 * * *"
+  workflow_dispatch: {}   # lets you trigger it manually from the Actions tab
+
+jobs:
+  auto-close:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run auto-closer
+        env:
+          INTERCOM_TOKEN: ${{ secrets.INTERCOM_TOKEN }}
+          INTERCOM_MY_ADMIN_ID: ${{ secrets.INTERCOM_MY_ADMIN_ID }}
+          SLACK_CLOSING_WEBHOOK_URL: ${{ secrets.SLACK_CLOSING_WEBHOOK_URL }}
+        run: python intercom_auto_closer.py
