@@ -1,0 +1,17 @@
+default_follow_up_marker: "I just wanted to follow up in case you missed my previous message"
+
+default_closing_message_template: |
+  Hi,
+
+  I'm glad I was able to help get everything sorted out for you. Before I close the conversation, I wanted to let you know that you'll receive a short CSAT survey about your experience with the support I provided. If you have a moment to share your feedback, I'd really appreciate hearing about your experience. Thanks again for your patience and for working through this with me. If you ever need help with anything else, please don't hesitate to reach out!
+  Have a great day!
+
+  Best,
+  {name}
+  {team}
+
+teammates:
+  - key: nitzan
+    name: Nitzan
+    team: Figma Weave Support
+    admin_id: "REPLACE_WITH_YOUR_INTERCOM_ADMIN_ID"
