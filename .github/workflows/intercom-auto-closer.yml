@@ -1,0 +1,52 @@
+name: Intercom Auto-Closer
+
+on:
+  schedule:
+    # 07:30 UTC = 10:30am Israel time (IDT, UTC+3).
+    # NOTE: Israel switches to winter time (IST, UTC+2) in late October -
+    # this will land at 9:30am local until the cron is updated for the season.
+    - cron: "30 7 * * *"
+  workflow_dispatch: {}   # lets you trigger it manually from the Actions tab
+  pull_request:            # run tests on every PR, don't touch real tickets
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest -v
+
+  auto-close:
+    needs: test
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run auto-closer for the whole team
+        env:
+          INTERCOM_TOKEN: ${{ secrets.INTERCOM_TOKEN }}
+          SLACK_WEBHOOKS_JSON: ${{ secrets.SLACK_WEBHOOKS_JSON }}
+        run: python intercom_auto_closer.py
