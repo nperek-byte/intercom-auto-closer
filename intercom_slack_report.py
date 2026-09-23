@@ -74,6 +74,7 @@ NOTE ON "WAITING SINCE":
 
 import os
 import sys
+import re
 import json
 import argparse
 from datetime import datetime, timezone
@@ -315,7 +316,7 @@ def extract_summary(conv):
         "waiting_since": waiting_since_iso,
         "waiting_seconds": waiting_seconds,
         "priority": str(custom_attrs.get(PRIORITY_ATTRIBUTE, "unset")),
-        "subject": source.get("subject") or None,
+        "subject": strip_html(source.get("subject")) or None,
         "snippet": (source.get("body") or "")[:500],
         "author_type": (source.get("author") or {}).get("type"),
         "state": conv.get("state"),
@@ -323,6 +324,14 @@ def extract_summary(conv):
         "team_assignee_id": conv.get("team_assignee_id"),
         "tags": [t.get("name") for t in (conv.get("tags", {}).get("tags", []) or [])],
     }
+
+
+def strip_html(html_text):
+    """Very small HTML-tag stripper, good enough for cleaning subjects and
+    snippets that come through with raw markup (e.g. some conversation
+    sources wrap the subject in <p> tags)."""
+    text = re.sub(r"<[^<]+?>", "", html_text or "")
+    return " ".join(text.split())
 
 
 def format_age(seconds):
@@ -448,6 +457,45 @@ def build_topic_breakdown_from_tags(items):
             label = TOPIC_LABELS.get(tag, tag)
             counts[label] = counts.get(label, 0) + 1
     sorted_counts = dict(sorted(counts.items(), key=lambda x: x[1], reverse=True))
+    return sorted_counts, untagged
+
+
+def classify_with_keywords(items):
+    """
+    Free, non-AI classification for when ANTHROPIC_API_KEY isn't available
+    (e.g. blocked by org policy): matches each ticket's subject + snippet
+    against the example phrases in TOPIC_HINTS (case-insensitive substring
+    match). Uses the SAME fixed taxonomy as the Claude path, so results are
+    directly comparable whether or not Claude classification is enabled.
+
+    Less nuanced than Claude - it can't recognize paraphrased or novel
+    wording it hasn't seen an example phrase for - but it reads actual
+    ticket content instead of relying on manually-applied tags, which is
+    usually a meaningful improvement over the raw-tag fallback when most
+    tickets aren't tagged.
+
+    Returns (topic_counts, untagged) or None if TOPIC_HINTS is empty.
+    """
+    if not TOPIC_HINTS:
+        return None
+
+    topic_counts = {}
+    untagged = 0
+    for item in items:
+        haystack = f"{item.get('subject') or ''} {item.get('snippet') or ''}".lower()
+        matched = []
+        for topic, hints in TOPIC_HINTS.items():
+            for hint in hints:
+                if hint.lower() in haystack:
+                    matched.append(topic)
+                    break  # one phrase hit is enough to count this topic once
+        if not matched:
+            untagged += 1
+            continue
+        for topic in matched:
+            topic_counts[topic] = topic_counts.get(topic, 0) + 1
+
+    sorted_counts = dict(sorted(topic_counts.items(), key=lambda x: x[1], reverse=True))
     return sorted_counts, untagged
 
 
@@ -662,7 +710,14 @@ def build_report():
         topic_counts, untagged, ai_summary = claude_result
         summary = ai_summary or build_summary_text(items, topic_counts, untagged, oldest_waiting_seconds, status)
     else:
-        topic_counts, untagged = build_topic_breakdown_from_tags(items)
+        # No Claude available (unset, blocked by org policy, or the call
+        # failed) - try free keyword matching against the real taxonomy
+        # before falling all the way back to raw Intercom tags.
+        keyword_result = classify_with_keywords(items)
+        if keyword_result:
+            topic_counts, untagged = keyword_result
+        else:
+            topic_counts, untagged = build_topic_breakdown_from_tags(items)
         summary = build_summary_text(items, topic_counts, untagged, oldest_waiting_seconds, status)
 
     daily_update = get_latest_daily_update()
