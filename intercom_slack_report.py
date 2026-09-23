@@ -759,7 +759,20 @@ def post_to_slack(report):
         sys.exit("SLACK_WEBHOOK_URL is not set. Set it as an environment variable / secret.")
 
     text = format_report_text(report)
-    payload = {SLACK_WORKFLOW_VARIABLE: text}
+
+    # Slack has two incompatible webhook payload formats, and this repo
+    # legitimately uses both (this script vs. the auto-closer's per-person
+    # webhooks), so detect which one we're talking to rather than assuming:
+    #   - Classic Incoming Webhooks (hooks.slack.com/services/...) expect
+    #     {"text": "..."}.
+    #   - Workflow Builder webhooks (hooks.slack.com/triggers/...) expect
+    #     the exact variable name configured on the trigger step, e.g.
+    #     {"report_text": "..."}.
+    if "hooks.slack.com/services/" in SLACK_WEBHOOK_URL:
+        payload = {"text": text}
+    else:
+        payload = {SLACK_WORKFLOW_VARIABLE: text}
+
     resp = SESSION.post(SLACK_WEBHOOK_URL, json=payload)
     resp.raise_for_status()
     print("Posted report to Slack.")
