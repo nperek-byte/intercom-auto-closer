@@ -2,8 +2,11 @@ name: Intercom Queue Report
 
 on:
   schedule:
-    # 06:00, 10:00, 14:00, 18:00 UTC. Adjust for your timezone with crontab.guru.
-    - cron: "0 6,10,14,18 * * *"
+    # 00:00, 06:00, 14:00 UTC = 03:00, 09:00, 17:00 Israel time (IDT, UTC+3).
+    # NOTE: Israel switches to winter time (IST, UTC+2) in late October -
+    # these will land an hour earlier local time until the cron is updated
+    # for the season.
+    - cron: "0 0,6,14 * * *"
   workflow_dispatch: {}
   pull_request:
   push:
@@ -47,6 +50,8 @@ jobs:
         env:
           INTERCOM_TOKEN: ${{ secrets.INTERCOM_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.QUEUE_REPORT_SLACK_WEBHOOK_URL }}
+          # Optional - omit these secrets entirely if you don't use them;
+          # the script skips those sections gracefully.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DAILY_UPDATES_DATA_SOURCE_ID: ${{ secrets.NOTION_DAILY_UPDATES_DATA_SOURCE_ID }}
